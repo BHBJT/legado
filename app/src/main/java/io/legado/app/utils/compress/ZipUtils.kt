@@ -16,14 +16,27 @@ import java.util.zip.*
 @Suppress("unused", "MemberVisibilityCanBePrivate")
 object ZipUtils {
 
-    fun zipString(text: String): ByteArray {
+    fun gzipByteArray(byteArray: ByteArray): ByteArray {
         val byteOut = ByteArrayOutputStream()
         val zip = GZIPOutputStream(byteOut)
-        zip.use {
-            it.write(text.toByteArray())
+        return zip.use {
+            it.write(byteArray)
+            byteOut.use {
+                byteOut.toByteArray()
+            }
         }
-        return byteOut.use {
-            it.toByteArray()
+    }
+
+    fun zipByteArray(byteArray: ByteArray, fileName: String): ByteArray {
+        val byteOut = ByteArrayOutputStream()
+        val zipOutputStream = ZipOutputStream(byteOut)
+        zipOutputStream.putNextEntry(ZipEntry(fileName))
+        zipOutputStream.write(byteArray)
+        zipOutputStream.closeEntry()
+        return zipOutputStream.use {
+            byteOut.use {
+                byteOut.toByteArray()
+            }
         }
     }
 
