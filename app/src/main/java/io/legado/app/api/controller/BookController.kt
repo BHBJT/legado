@@ -14,11 +14,15 @@ import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.model.BookCover
+import io.legado.app.model.ImageProvider
 import io.legado.app.model.ReadBook
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.webBook.WebBook
-import io.legado.app.ui.book.read.page.provider.ImageProvider
-import io.legado.app.utils.*
+import io.legado.app.utils.GSON
+import io.legado.app.utils.cnCompare
+import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.printOnDebug
+import io.legado.app.utils.stackTraceStr
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import splitties.init.appCtx
@@ -197,11 +201,11 @@ object BookController {
     /**
      * 保存书籍
      */
-    fun saveBook(postData: String?): ReturnData {
+    suspend fun saveBook(postData: String?): ReturnData {
         val returnData = ReturnData()
         GSON.fromJsonObject<Book>(postData).getOrNull()?.let { book ->
-            book.save()
             AppWebDav.uploadBookProgress(book)
+            book.save()
             return returnData.setData("")
         }
         return returnData.setErrorMsg("格式不对")
@@ -222,7 +226,7 @@ object BookController {
     /**
      * 保存进度
      */
-    fun saveBookProgress(postData: String?): ReturnData {
+    suspend fun saveBookProgress(postData: String?): ReturnData {
         val returnData = ReturnData()
         GSON.fromJsonObject<BookProgress>(postData)
             .onFailure { it.printOnDebug() }
@@ -232,8 +236,10 @@ object BookController {
                     book.durChapterPos = bookProgress.durChapterPos
                     book.durChapterTitle = bookProgress.durChapterTitle
                     book.durChapterTime = bookProgress.durChapterTime
+                    AppWebDav.uploadBookProgress(bookProgress) {
+                        book.syncTime = System.currentTimeMillis()
+                    }
                     appDb.bookDao.update(book)
-                    AppWebDav.uploadBookProgress(bookProgress)
                     ReadBook.book?.let {
                         if (it.name == bookProgress.name &&
                             it.author == bookProgress.author

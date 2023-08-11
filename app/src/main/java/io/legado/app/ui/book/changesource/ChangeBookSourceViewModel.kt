@@ -4,12 +4,11 @@ import android.app.Application
 import android.os.Bundle
 import androidx.annotation.CallSuper
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.viewModelScope
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
-import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -21,10 +20,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.SourceConfig
 import io.legado.app.help.coroutine.CompositeCoroutine
 import io.legado.app.help.coroutine.Coroutine
-import io.legado.app.model.ReadBook
 import io.legado.app.model.webBook.WebBook
-import io.legado.app.ui.book.read.ReadBookActivity
-import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.*
@@ -90,23 +86,30 @@ open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(a
             searchCallback = null
         }
     }.map {
-        searchBooks.sortedWith { o1, o2 ->
-            val o1bs = SourceConfig.getBookScore(o1.origin, o1.name, o1.author)
-            val o2bs = SourceConfig.getBookScore(o2.origin, o2.name, o2.author)
-            when {
-                o1bs - o2bs > 0 -> -1
-                o1bs - o2bs < 0 -> 1
-                else -> {
-                    val o1ss = SourceConfig.getSourceScore(o1.origin)
-                    val o2ss = SourceConfig.getSourceScore(o2.origin)
-                    when {
-                        o1ss - o2ss > 0 -> -1
-                        o1ss - o2ss < 0 -> 1
-                        else -> o1.originOrder - o2.originOrder
+        kotlin.runCatching {
+            searchBooks.sortedWith { o1, o2 ->
+                val o1bs = SourceConfig.getBookScore(o1.origin, o1.name, o1.author)
+                val o2bs = SourceConfig.getBookScore(o2.origin, o2.name, o2.author)
+                when {
+                    o1bs - o2bs > 0 -> -1
+                    o1bs - o2bs < 0 -> 1
+                    else -> {
+                        val o1ss = SourceConfig.getSourceScore(o1.origin)
+                        val o2ss = SourceConfig.getSourceScore(o2.origin)
+                        when {
+                            o1ss - o2ss > 0 -> -1
+                            o1ss - o2ss < 0 -> 1
+                            else -> {
+                                val n = o1.originOrder - o2.originOrder
+                                if (n == 0) -1 else n
+                            }
+                        }
                     }
                 }
             }
-        }
+        }.onFailure {
+            AppLog.put("换源排序出错\n${it.localizedMessage}", it)
+        }.getOrDefault(searchBooks)
     }.flowOn(IO)
 
     @Volatile
@@ -184,7 +187,7 @@ open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(a
             searchIndex++
         }
         val source = bookSourceList[searchIndex]
-        val task = Coroutine.async(scope = viewModelScope, context = searchPool!!) {
+        val task = execute(context = searchPool!!, executeContext = searchPool!!) {
             val resultBooks = WebBook.searchBookAwait(source, name)
             resultBooks.forEach { searchBook ->
                 if (searchBook.name != name) {
@@ -328,8 +331,8 @@ open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(a
             searchIndex++
         }
         val searchBook = searchBookList[searchIndex]
-        val task = Coroutine.async(scope = viewModelScope, context = searchPool!!) {
-            val source = appDb.bookSourceDao.getBookSource(searchBook.origin) ?: return@async
+        val task = execute(context = searchPool!!, executeContext = searchPool!!) {
+            val source = appDb.bookSourceDao.getBookSource(searchBook.origin) ?: return@execute
             loadBookInfo(source, searchBook.toBook())
         }.timeout(60000L)
             .onError {
@@ -430,15 +433,13 @@ open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(a
 
     suspend fun getToc(book: Book): Result<Pair<List<BookChapter>, BookSource>> {
         return kotlin.runCatching {
-            withContext(IO) {
-                val source = appDb.bookSourceDao.getBookSource(book.origin)
-                    ?: throw NoStackTraceException("书源不存在")
-                if (book.tocUrl.isEmpty()) {
-                    WebBook.getBookInfoAwait(source, book)
-                }
-                val toc = WebBook.getChapterListAwait(source, book).getOrThrow()
-                Pair(toc, source)
+            val source = appDb.bookSourceDao.getBookSource(book.origin)
+                ?: throw NoStackTraceException("书源不存在")
+            if (book.tocUrl.isEmpty()) {
+                WebBook.getBookInfoAwait(source, book)
             }
+            val toc = WebBook.getChapterListAwait(source, book).getOrThrow()
+            Pair(toc, source)
         }
     }
 

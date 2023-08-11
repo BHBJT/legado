@@ -174,7 +174,7 @@ open class WebDav(
         val baseUrl = NetworkUtils.getBaseUrl(urlStr)
         for (element in elements) {
             //依然是优化支持 caddy 自建的 WebDav ，其目录后缀都为“/”, 所以删除“/”的判定，不然无法获取该目录项
-            val href = element.findNS("href", ns)[0].text().replace("+", "%20")
+            val href = element.findNS("href", ns)[0].text().replace("+", "%2B")
             val hrefDecode = URLDecoder.decode(href, "UTF-8")
                 .removeSuffix("/")
             val fileName = hrefDecode.substringAfterLast("/")
@@ -305,9 +305,16 @@ open class WebDav(
         localPath: String,
         contentType: String = "application/octet-stream"
     ) {
+        upload(File(localPath), contentType)
+    }
+
+    @Throws(WebDavException::class)
+    suspend fun upload(
+        file: File,
+        contentType: String = "application/octet-stream"
+    ) {
         kotlin.runCatching {
             withContext(IO) {
-                val file = File(localPath)
                 if (!file.exists()) throw WebDavException("文件不存在")
                 // 务必注意RequestBody不要嵌套，不然上传时内容可能会被追加多余的文件信息
                 val fileBody = file.asRequestBody(contentType.toMediaType())

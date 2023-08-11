@@ -16,15 +16,16 @@ import io.legado.app.utils.ConflateLiveData
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.mapLatest
+import java.util.Collections
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModel(application: Application) : BaseViewModel(application) {
     val handler = Handler(Looper.getMainLooper())
-    val bookshelf = hashSetOf<String>()
+    val bookshelf: MutableSet<String> = Collections.synchronizedSet(hashSetOf<String>())
     val upAdapterLiveData = MutableLiveData<String>()
     var searchBookLiveData = ConflateLiveData<List<SearchBook>>(1000)
     val searchScope: SearchScope = SearchScope(AppConfig.searchScope)
-    var searchFinishCallback: ((isEmpty: Boolean) -> Unit)? = null
+    var searchFinishLiveData = MutableLiveData<Boolean>()
     var isSearchLiveData = MutableLiveData<Boolean>()
     var searchKey: String = ""
     private var searchID = 0L
@@ -44,7 +45,7 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
 
         override fun onSearchFinish(isEmpty: Boolean) {
             isSearchLiveData.postValue(false)
-            searchFinishCallback?.invoke(isEmpty)
+            searchFinishLiveData.postValue(isEmpty)
         }
 
         override fun onSearchCancel(exception: Exception?) {
