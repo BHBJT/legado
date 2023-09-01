@@ -305,32 +305,30 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 更新菜单
      */
     private fun upMenu() {
-        val menu = menu
-        val book = ReadBook.book
-        if (menu != null && book != null) {
-            val onLine = !book.isLocal
-            for (i in 0 until menu.size) {
-                val item = menu[i]
-                when (item.groupId) {
-                    R.id.menu_group_on_line -> item.isVisible = onLine
-                    R.id.menu_group_local -> item.isVisible = !onLine
-                    R.id.menu_group_text -> item.isVisible = book.isLocalTxt
-                    else -> when (item.itemId) {
-                        R.id.menu_enable_replace -> item.isChecked = book.getUseReplaceRule()
-                        R.id.menu_re_segment -> item.isChecked = book.getReSegment()
-                        R.id.menu_enable_review -> {
-                            item.isVisible = BuildConfig.DEBUG
-                            item.isChecked = AppConfig.enableReview
-                        }
-
-                        R.id.menu_reverse_content -> item.isVisible = onLine
+        val menu = menu ?: return
+        val book = ReadBook.book ?: return
+        val onLine = !book.isLocal
+        for (i in 0 until menu.size) {
+            val item = menu[i]
+            when (item.groupId) {
+                R.id.menu_group_on_line -> item.isVisible = onLine
+                R.id.menu_group_local -> item.isVisible = !onLine
+                R.id.menu_group_text -> item.isVisible = book.isLocalTxt
+                else -> when (item.itemId) {
+                    R.id.menu_enable_replace -> item.isChecked = book.getUseReplaceRule()
+                    R.id.menu_re_segment -> item.isChecked = book.getReSegment()
+                    R.id.menu_enable_review -> {
+                        item.isVisible = BuildConfig.DEBUG
+                        item.isChecked = AppConfig.enableReview
                     }
+
+                    R.id.menu_reverse_content -> item.isVisible = onLine
                 }
             }
-            lifecycleScope.launch {
-                menu.findItem(R.id.menu_get_progress)?.isVisible = withContext(IO) {
-                    AppWebDav.isOk
-                }
+        }
+        lifecycleScope.launch {
+            menu.findItem(R.id.menu_get_progress)?.isVisible = withContext(IO) {
+                AppWebDav.isOk
             }
         }
     }
@@ -774,7 +772,6 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     override fun upMenuView() {
         lifecycleScope.launch {
-            upMenu()
             binding.readMenu.upBookView()
         }
     }
@@ -791,6 +788,9 @@ class ReadBookActivity : BaseReadBookActivity(),
         if (intent.getBooleanExtra("readAloud", false)) {
             intent.removeExtra("readAloud")
             ReadBook.readAloud()
+        }
+        if (BaseReadAloudService.isRun) {
+            ReadAloud.upTtsProgress(this)
         }
         loadStates = true
     }
@@ -1135,10 +1135,24 @@ class ReadBookActivity : BaseReadBookActivity(),
         when {
             !BaseReadAloudService.isRun -> {
                 ReadAloud.upReadAloudClass()
-                ReadBook.readAloud()
+                val scrollPageAnim = ReadBook.pageAnim() == 3
+                if (scrollPageAnim) {
+                    val startPos = binding.readView.getCurPagePosition()
+                    ReadBook.readAloud(startPos = startPos)
+                } else {
+                    ReadBook.readAloud()
+                }
             }
 
-            BaseReadAloudService.pause -> ReadAloud.resume(this)
+            BaseReadAloudService.pause -> {
+                val scrollPageAnim = ReadBook.pageAnim() == 3
+                if (scrollPageAnim) {
+                    val startPos = binding.readView.getCurPagePosition()
+                    ReadAloud.play(this, startPos = startPos)
+                } else {
+                    ReadAloud.resume(this)
+                }
+            }
             else -> ReadAloud.pause(this)
         }
     }

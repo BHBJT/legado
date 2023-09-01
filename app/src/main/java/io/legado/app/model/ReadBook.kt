@@ -177,6 +177,20 @@ object ReadBook : CoroutineScope by MainScope() {
         return hasNextPage
     }
 
+    fun moveToPrevPage(): Boolean {
+        var hasPrevPage = false
+        curTextChapter?.let {
+            val prevPagePos = it.getPrevPageLength(durChapterPos)
+            if (prevPagePos >= 0) {
+                hasPrevPage = true
+                durChapterPos = prevPagePos
+                callBack?.upContent()
+                saveRead()
+            }
+        }
+        return hasPrevPage
+    }
+
     fun moveToNextChapter(upContent: Boolean): Boolean {
         if (durChapterIndex < chapterSize - 1) {
             durChapterPos = 0
@@ -186,7 +200,7 @@ object ReadBook : CoroutineScope by MainScope() {
             nextTextChapter = null
             if (curTextChapter == null) {
                 AppLog.putDebug("moveToNextChapter-章节未加载,开始加载")
-                loadContent(durChapterIndex, upContent, false)
+                loadContent(durChapterIndex, upContent, resetPageOffset = false, pageChanged = true)
             } else if (upContent) {
                 AppLog.putDebug("moveToNextChapter-章节已加载,刷新视图")
                 callBack?.upContent()
@@ -214,7 +228,7 @@ object ReadBook : CoroutineScope by MainScope() {
             curTextChapter = prevTextChapter
             prevTextChapter = null
             if (curTextChapter == null) {
-                loadContent(durChapterIndex, upContent, false)
+                loadContent(durChapterIndex, upContent, resetPageOffset = false, pageChanged = true)
             } else if (upContent) {
                 callBack?.upContent()
             }
@@ -249,7 +263,12 @@ object ReadBook : CoroutineScope by MainScope() {
     private fun curPageChanged() {
         callBack?.pageChanged()
         if (BaseReadAloudService.isRun) {
-            readAloud(!BaseReadAloudService.pause)
+            val scrollPageAnim = pageAnim() == 3
+            if (scrollPageAnim) {
+                ReadAloud.pause(appCtx)
+            } else {
+                readAloud(!BaseReadAloudService.pause)
+            }
         }
         upReadTime()
         preDownload()
@@ -258,9 +277,9 @@ object ReadBook : CoroutineScope by MainScope() {
     /**
      * 朗读
      */
-    fun readAloud(play: Boolean = true) {
+    fun readAloud(play: Boolean = true, startPos: Int = 0) {
         book?.let {
-            ReadAloud.play(appCtx, play)
+            ReadAloud.play(appCtx, play, startPos = startPos)
         }
     }
 
@@ -302,12 +321,14 @@ object ReadBook : CoroutineScope by MainScope() {
      * @param index 章节序号
      * @param upContent 是否更新视图
      * @param resetPageOffset 滚动阅读是否重置滚动位置
+     * @param pageChanged 是否发生了翻页
      * @param success 加载完成回调
      */
     fun loadContent(
         index: Int,
         upContent: Boolean = true,
         resetPageOffset: Boolean = false,
+        pageChanged: Boolean = false,
         success: (() -> Unit)? = null
     ) {
         if (addLoading(index)) {
@@ -315,10 +336,22 @@ object ReadBook : CoroutineScope by MainScope() {
                 val book = book!!
                 appDb.bookChapterDao.getChapter(book.bookUrl, index)?.let { chapter ->
                     BookHelp.getContent(book, chapter)?.let {
-                        contentLoadFinish(book, chapter, it, upContent, resetPageOffset) {
+                        contentLoadFinish(
+                            book,
+                            chapter,
+                            it,
+                            upContent,
+                            resetPageOffset,
+                            pageChanged
+                        ) {
                             success?.invoke()
                         }
-                    } ?: download(this, chapter, resetPageOffset = resetPageOffset)
+                    } ?: download(
+                        this,
+                        chapter,
+                        resetPageOffset = resetPageOffset,
+                        pageChanged = pageChanged
+                    )
                 } ?: removeLoading(index)
             }.onError {
                 removeLoading(index)
@@ -345,7 +378,7 @@ object ReadBook : CoroutineScope by MainScope() {
                         downloadedChapters.add(chapter.index)
                     } else {
                         delay(1000)
-                        download(this, chapter, false)
+                        download(this, chapter, resetPageOffset = false, pageChanged = false)
                     }
                 } ?: removeLoading(index)
             } catch (e: Exception) {
@@ -361,6 +394,7 @@ object ReadBook : CoroutineScope by MainScope() {
         scope: CoroutineScope,
         chapter: BookChapter,
         resetPageOffset: Boolean,
+        pageChanged: Boolean,
         success: (() -> Unit)? = null
     ) {
         val book = book ?: return removeLoading(chapter.index)
@@ -370,7 +404,11 @@ object ReadBook : CoroutineScope by MainScope() {
         } else {
             val msg = if (book.isLocal) "无内容" else "没有书源"
             contentLoadFinish(
-                book, chapter, "加载正文失败\n$msg", resetPageOffset = resetPageOffset
+                book,
+                chapter,
+                "加载正文失败\n$msg",
+                resetPageOffset = resetPageOffset,
+                pageChanged = pageChanged
             ) {
                 success?.invoke()
             }
@@ -400,6 +438,7 @@ object ReadBook : CoroutineScope by MainScope() {
         content: String,
         upContent: Boolean = true,
         resetPageOffset: Boolean,
+        pageChanged: Boolean,
         success: (() -> Unit)? = null
     ) {
         Coroutine.async {
@@ -419,7 +458,7 @@ object ReadBook : CoroutineScope by MainScope() {
                         curTextChapter = textChapter
                         if (upContent) callBack?.upContent(offset, resetPageOffset)
                         callBack?.upMenuView()
-                        curPageChanged()
+                        if (pageChanged) curPageChanged()
                         callBack?.contentLoadFinish()
                     }
 
