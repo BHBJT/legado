@@ -7,6 +7,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import io.legado.app.R
+import io.legado.app.constant.AppLog
 import io.legado.app.exception.NoStackTraceException
 import kotlinx.parcelize.Parcelize
 import splitties.init.appCtx
@@ -84,8 +85,13 @@ data class ReplaceRule(
             try {
                 Pattern.compile(pattern)
             } catch (ex: PatternSyntaxException) {
+                AppLog.put("正则语法错误或不支持：${ex.localizedMessage}", ex)
                 return false
             }
+        }
+        // Pattern.compile测试通过，但是部分情况下会替换超时，报错，一般发生在修改表达式时漏删了
+        if (pattern.endsWith('|') and !pattern.endsWith("\\|")) {
+            return false
         }
         return true
     }

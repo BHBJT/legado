@@ -1,11 +1,10 @@
 package io.legado.app.help
 
 import android.net.Uri
+import android.webkit.WebSettings
 import androidx.annotation.Keep
 import cn.hutool.core.codec.Base64
 import cn.hutool.core.util.HexUtil
-import com.github.junrar.Archive
-import com.github.junrar.rarfile.FileHeader
 import com.github.liuyueyi.quick.transfer.ChineseUtils
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppConst.dateFormat
@@ -23,13 +22,11 @@ import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.analyzeRule.QueryTTF
 import io.legado.app.utils.*
+import io.legado.app.utils.compress.LibArchiveUtils
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import okio.use
-import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
-import org.apache.commons.compress.archivers.sevenz.SevenZFile
-import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
 import org.jsoup.Connection
 import org.jsoup.Jsoup
 import splitties.init.appCtx
@@ -494,6 +491,10 @@ interface JsExtensions : JsEncodeUtils {
         return ChineseUtils.s2t(text)
     }
 
+    fun getWebViewUA(): String {
+        return WebSettings.getDefaultUserAgent(appCtx)
+    }
+
 //****************文件操作******************//
 
     /**
@@ -699,18 +700,9 @@ interface JsExtensions : JsEncodeUtils {
             HexUtil.decodeHex(url)
         }
 
-        val bos = ByteArrayOutputStream()
-        Archive(ByteArrayInputStream(bytes)).use { archive ->
-            var entry: FileHeader
-            while (archive.nextFileHeader().also { entry = it } != null) {
-                if (entry.fileName.equals(path)) {
-                    archive.getInputStream(entry).use { it.copyTo(bos) }
-                    return bos.toByteArray()
-                }
-            }
+        return ByteArrayInputStream(bytes).use {
+            LibArchiveUtils.getByteArrayContent(it, path)
         }
-        log("getRarContent 未发现内容")
-        return null
     }
 
     /**
@@ -726,18 +718,9 @@ interface JsExtensions : JsEncodeUtils {
             HexUtil.decodeHex(url)
         }
 
-        val bos = ByteArrayOutputStream()
-        SevenZFile(SeekableInMemoryByteChannel(bytes)).use { sevenZFile ->
-            var entry: SevenZArchiveEntry
-            while (sevenZFile.nextEntry.also { entry = it } != null) {
-                if (entry.name.equals(path)) {
-                    sevenZFile.getInputStream(entry).use { it.copyTo(bos) }
-                    return bos.toByteArray()
-                }
-            }
+        return ByteArrayInputStream(bytes).use {
+            LibArchiveUtils.getByteArrayContent(it, path)
         }
-        log("get7zContent 未发现内容")
-        return null
     }
 
 

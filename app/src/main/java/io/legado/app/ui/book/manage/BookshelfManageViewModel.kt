@@ -10,10 +10,19 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.removeType
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.webBook.WebBook
+import io.legado.app.utils.FileUtils
+import io.legado.app.utils.GSON
+import io.legado.app.utils.stackTraceStr
 import io.legado.app.utils.toastOnUi
+import io.legado.app.utils.writeToOutputStream
+import kotlinx.coroutines.delay
+import java.io.BufferedOutputStream
+import java.io.File
+import java.io.FileOutputStream
 
 
 class BookshelfManageViewModel(application: Application) : BaseViewModel(application) {
@@ -49,9 +58,30 @@ class BookshelfManageViewModel(application: Application) : BaseViewModel(applica
         }
     }
 
+    @Suppress("BlockingMethodInNonBlockingContext")
+    fun saveAllUseBookSourceToFile(success: (file: File) -> Unit) {
+        execute {
+            val path = "${context.filesDir}/shareBookSource.json"
+            FileUtils.delete(path)
+            val file = FileUtils.createFileWithReplace(path)
+            val sources = appDb.bookDao.getAllUseBookSource()
+            FileOutputStream(file).use { out ->
+                BufferedOutputStream(out, 64 * 1024).use {
+                    GSON.writeToOutputStream(it, sources)
+                }
+            }
+            file
+        }.onSuccess {
+            success.invoke(it)
+        }.onError {
+            context.toastOnUi(it.stackTraceStr)
+        }
+    }
+
     fun changeSource(books: List<Book>, source: BookSource) {
         batchChangeSourceCoroutine?.cancel()
         batchChangeSourceCoroutine = execute {
+            val changeSourceDelay = AppConfig.batchChangeSourceDelay * 1000L
             books.forEachIndexed { index, book ->
                 batchChangeSourceProcessLiveData.postValue("${index + 1} / ${books.size}")
                 if (book.isLocal) return@forEachIndexed
@@ -69,6 +99,7 @@ class BookshelfManageViewModel(application: Application) : BaseViewModel(applica
                         appDb.bookDao.insert(newBook)
                         appDb.bookChapterDao.insert(*toc.toTypedArray())
                     }
+                delay(changeSourceDelay)
             }
         }.onStart {
             batchChangeSourceState.postValue(true)

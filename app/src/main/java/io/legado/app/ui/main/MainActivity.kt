@@ -91,6 +91,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             bottomNavigationView.setOnNavigationItemSelectedListener(this@MainActivity)
             bottomNavigationView.setOnNavigationItemReselectedListener(this@MainActivity)
         }
+        upHomePage()
         onBackPressedDispatcher.addCallback(this) {
             if (pagePosition != 0) {
                 binding.viewPagerMain.currentItem = 0
@@ -123,7 +124,12 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 }
             }
         }
-        return super.dispatchTouchEvent(ev)
+        return try {
+            super.dispatchTouchEvent(ev)
+        } catch (e: IllegalArgumentException) {
+            e.printStackTrace()
+            false
+        }
     }
 
     override fun onPostCreate(savedInstanceState: Bundle?) {
@@ -369,6 +375,21 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         adapter.notifyDataSetChanged()
     }
 
+    private fun upHomePage() {
+        when (AppConfig.defaultHomePage) {
+            "bookshelf" -> {}
+            "explore" -> if (AppConfig.showDiscovery) {
+                binding.viewPagerMain.setCurrentItem(realPositions.indexOf(idExplore), false)
+            }
+
+            "rss" -> if (AppConfig.showRSS) {
+                binding.viewPagerMain.setCurrentItem(realPositions.indexOf(idRss), false)
+            }
+
+            "my" -> binding.viewPagerMain.setCurrentItem(realPositions.indexOf(idMy), false)
+        }
+    }
+
     private fun getFragmentId(position: Int): Int {
         val id = realPositions[position]
         if (id == idBookshelf) {
@@ -380,14 +401,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private inner class PageChangeCallback : ViewPager.SimpleOnPageChangeListener() {
 
         override fun onPageSelected(position: Int) {
-            val oldPosition = pagePosition
             pagePosition = position
             binding.bottomNavigationView.menu
                 .getItem(realPositions[position]).isChecked = true
-            val callback1 = fragmentMap[getFragmentId(position)] as? Callback
-            val callback2 = fragmentMap[getFragmentId(oldPosition)] as? Callback
-            callback1?.onActive()
-            callback2?.onInactive()
         }
 
     }
@@ -434,14 +450,6 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             fragmentMap[getId(position)] = fragment
             return fragment
         }
-
-    }
-
-    interface Callback {
-
-        fun onActive()
-
-        fun onInactive()
 
     }
 

@@ -9,7 +9,6 @@ import androidx.lifecycle.LiveData
 import io.legado.app.R
 import io.legado.app.base.VMBaseFragment
 import io.legado.app.constant.EventBus
-import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
@@ -137,7 +136,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
     @SuppressLint("InflateParams")
     fun configBookshelf() {
         alert(titleResource = R.string.bookshelf_layout) {
-            val bookshelfLayout = getPrefInt(PreferKey.bookshelfLayout)
+            val bookshelfLayout = AppConfig.bookshelfLayout
             val bookshelfSort = AppConfig.bookshelfSort
             val alertBinding =
                 DialogBookshelfConfigBinding.inflate(layoutInflater)
@@ -146,6 +145,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                         swShowUnread.isChecked = AppConfig.showUnread
                         swShowLastUpdateTime.isChecked = AppConfig.showLastUpdateTime
                         swShowWaitUpBooks.isChecked = AppConfig.showWaitUpCount
+                        swShowBookshelfFastScroller.isChecked = AppConfig.showBookshelfFastScroller
                         rgLayout.checkByIndex(bookshelfLayout)
                         rgSort.checkByIndex(bookshelfSort)
                     }
@@ -168,12 +168,16 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                         AppConfig.showWaitUpCount = swShowWaitUpBooks.isChecked
                         activityViewModel.postUpBooksLiveData(true)
                     }
+                    if (AppConfig.showBookshelfFastScroller != swShowBookshelfFastScroller.isChecked) {
+                        AppConfig.showBookshelfFastScroller = swShowBookshelfFastScroller.isChecked
+                        postEvent(EventBus.BOOKSHELF_REFRESH, "")
+                    }
                     if (bookshelfSort != rgSort.getCheckedIndex()) {
                         AppConfig.bookshelfSort = rgSort.getCheckedIndex()
                         upSort()
                     }
                     if (bookshelfLayout != rgLayout.getCheckedIndex()) {
-                        putPrefInt(PreferKey.bookshelfLayout, rgLayout.getCheckedIndex())
+                        AppConfig.bookshelfLayout = rgLayout.getCheckedIndex()
                         postEvent(EventBus.RECREATE, "")
                     }
                 }

@@ -1,6 +1,6 @@
 package me.ag2s.epublib.domain;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import me.ag2s.epublib.util.StringUtil;
@@ -53,13 +53,14 @@ public class MediaTypes {
             "application/adobe-page-template+xml", ".xpgt");
     public static final MediaType PLS = new MediaType("application/pls+xml",
             ".pls");
+    public static final MediaType UNKNOWN = new MediaType("application/octet-stream", "");
 
     public static final MediaType[] mediaTypes = new MediaType[]{
             XHTML, EPUB, JPG, PNG, GIF, CSS, SVG, TTF, NCX, XPGT, OPENTYPE, WOFF,
-            SMIL, PLS, JAVASCRIPT, MP3, MP4, OGG
+            SMIL, PLS, JAVASCRIPT, MP3, MP4, OGG, UNKNOWN
     };
 
-    public static final Map<String, MediaType> mediaTypesByName = new HashMap<>();
+    public static final Map<String, MediaType> mediaTypesByName = new LinkedHashMap<>();
 
     static {
         for (MediaType mediaType : mediaTypes) {

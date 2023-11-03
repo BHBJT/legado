@@ -11,11 +11,11 @@ import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentStatePagerAdapter
 import com.google.android.material.tabs.TabLayout
 import io.legado.app.R
-import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBookshelf1Binding
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.group.GroupEditDialog
@@ -109,7 +109,7 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
     private fun selectLastTab() {
         tabLayout.post {
             tabLayout.removeOnTabSelectedListener(this)
-            tabLayout.getTabAt(getPrefInt(PreferKey.saveTabPosition, 0))?.select()
+            tabLayout.getTabAt(AppConfig.saveTabPosition)?.select()
             tabLayout.addOnTabSelectedListener(this)
         }
     }
@@ -125,7 +125,7 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
     override fun onTabUnselected(tab: TabLayout.Tab) = Unit
 
     override fun onTabSelected(tab: TabLayout.Tab) {
-        putPrefInt(PreferKey.saveTabPosition, tab.position)
+        AppConfig.saveTabPosition = tab.position
     }
 
     override fun gotoTop() {

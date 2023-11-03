@@ -24,7 +24,6 @@ import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.king.zxing.DecodeFormatManager
-import com.king.zxing.util.LogUtils
 import java.util.EnumMap
 import kotlin.math.max
 
@@ -96,14 +95,14 @@ object QRCodeUtils {
             }
 
             // 生成二维码图片的格式
-            var bitmap = Bitmap.createBitmap(heightPix, heightPix, Bitmap.Config.ARGB_8888)
+            var bitmap: Bitmap? = Bitmap.createBitmap(heightPix, heightPix, Bitmap.Config.ARGB_8888)
             bitmap!!.setPixels(pixels, 0, heightPix, 0, 0, heightPix, heightPix)
             if (logo != null) {
                 bitmap = addLogo(bitmap, logo, ratio)
             }
             return bitmap
         } catch (e: WriterException) {
-            LogUtils.w(e.message)
+            e.printOnDebug()
         }
         return null
     }
@@ -141,7 +140,7 @@ object QRCodeUtils {
 
         //logo大小为二维码整体大小
         val scaleFactor = srcWidth * ratio / logoWidth
-        var bitmap = Bitmap.createBitmap(srcWidth, srcHeight, Bitmap.Config.ARGB_8888)
+        var bitmap: Bitmap? = Bitmap.createBitmap(srcWidth, srcHeight, Bitmap.Config.ARGB_8888)
         try {
             val canvas = Canvas(bitmap!!)
             canvas.drawBitmap(src, 0f, 0f, null)
@@ -161,7 +160,7 @@ object QRCodeUtils {
             canvas.restore()
         } catch (e: Exception) {
             bitmap = null
-            LogUtils.w(e.message)
+            e.printOnDebug()
         }
         return bitmap
     }
@@ -222,7 +221,7 @@ object QRCodeUtils {
                 }
             }
         } catch (e: java.lang.Exception) {
-            LogUtils.w(e.message)
+            e.printOnDebug()
         } finally {
             reader.reset()
         }
@@ -295,7 +294,7 @@ object QRCodeUtils {
                 result = decodeInternal(reader, source.rotateCounterClockwise())
             }
         } catch (e: Exception) {
-            LogUtils.w(e.message)
+            e.printOnDebug()
         } finally {
             reader.reset()
         }
@@ -416,7 +415,7 @@ object QRCodeUtils {
                 addCode(bitmap, content, textSize, codeColor, textSize / 2)
             } else bitmap
         } catch (e: WriterException) {
-            LogUtils.w(e.message)
+            e.printOnDebug()
         }
         return null
     }
@@ -449,7 +448,7 @@ object QRCodeUtils {
         if (srcWidth <= 0 || srcHeight <= 0) {
             return null
         }
-        var bitmap = Bitmap.createBitmap(
+        var bitmap: Bitmap? = Bitmap.createBitmap(
             srcWidth,
             srcHeight + textSize + offset * 2,
             Bitmap.Config.ARGB_8888
@@ -471,7 +470,7 @@ object QRCodeUtils {
             canvas.restore()
         } catch (e: Exception) {
             bitmap = null
-            LogUtils.w(e.message)
+            e.printOnDebug()
         }
         return bitmap
     }
