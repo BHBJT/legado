@@ -16,10 +16,12 @@ import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.isEpub
 import io.legado.app.help.book.isImage
+import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isPdf
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.model.ReadBook
+import io.legado.app.model.localBook.LocalBook
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.fromJsonObject
@@ -282,6 +284,14 @@ data class Book(
         }
     }
 
+    fun getBookSource(): BookSource? {
+        return appDb.bookSourceDao.getBookSource(origin)
+    }
+
+    fun isLocalModified(): Boolean {
+        return isLocal && LocalBook.getLastModified(this).getOrDefault(0L) > latestChapterTime
+    }
+
     fun toSearchBook() = SearchBook(
         name = name,
         author = author,
@@ -309,8 +319,24 @@ data class Book(
         newBook.durChapterIndex = BookHelp
             .getDurChapter(durChapterIndex, durChapterTitle, toc, totalChapterNum)
         newBook.durChapterTitle = toc[newBook.durChapterIndex].getDisplayTitle(
-            ContentProcessor.get(newBook.name, newBook.origin).getTitleReplaceRules()
+            ContentProcessor.get(newBook.name, newBook.origin).getTitleReplaceRules(),
+            getUseReplaceRule()
         )
+        newBook.durChapterPos = durChapterPos
+        newBook.durChapterTime = durChapterTime
+        newBook.group = group
+        newBook.order = order
+        newBook.customCoverUrl = customCoverUrl
+        newBook.customIntro = customIntro
+        newBook.customTag = customTag
+        newBook.canUpdate = canUpdate
+        newBook.readConfig = readConfig
+        return newBook
+    }
+
+    fun updateTo(newBook: Book): Book {
+        newBook.durChapterIndex = durChapterIndex
+        newBook.durChapterTitle = durChapterTitle
         newBook.durChapterPos = durChapterPos
         newBook.durChapterTime = durChapterTime
         newBook.group = group
