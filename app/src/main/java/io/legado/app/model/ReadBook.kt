@@ -20,17 +20,20 @@ import io.legado.app.model.localBook.TextFile
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.page.entities.TextChapter
-import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.book.read.page.provider.LayoutProgressListener
 import io.legado.app.utils.stackTraceStr
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import splitties.init.appCtx
 import kotlin.math.max
@@ -63,7 +66,7 @@ object ReadBook : CoroutineScope by MainScope() {
     /* web端阅读进度记录 */
     var webBookProgress: BookProgress? = null
 
-    var preDownloadTask: Coroutine<*>? = null
+    var preDownloadTask: Job? = null
     val downloadedChapters = hashSetOf<Int>()
     val downloadFailChapters = hashMapOf<Int, Int>()
     var contentProcessor: ContentProcessor? = null
@@ -168,9 +171,10 @@ object ReadBook : CoroutineScope by MainScope() {
 
     fun uploadProgress() {
         book?.let {
-            Coroutine.async {
+            launch(IO) {
                 AppWebDav.uploadBookProgress(it)
-                it.save()
+                ensureActive()
+                it.update()
             }
         }
     }
@@ -200,6 +204,7 @@ object ReadBook : CoroutineScope by MainScope() {
             val nextPagePos = it.getNextPageLength(durChapterPos)
             if (nextPagePos >= 0) {
                 hasNextPage = true
+                it.getPage(durPageIndex)?.removePageAloudSpan()
                 durChapterPos = nextPagePos
                 callBack?.upContent()
                 saveRead(true)
@@ -296,14 +301,12 @@ object ReadBook : CoroutineScope by MainScope() {
 
     fun recycleRecorders(beforeIndex: Int, afterIndex: Int) {
         executor.execute {
-            val textChapter = curTextChapter
-            if (textChapter != null) {
-                if (afterIndex > beforeIndex) {
-                    textChapter.getPage(afterIndex - 2)?.recycleRecorders()
-                }
-                if (afterIndex < beforeIndex) {
-                    textChapter.getPage(afterIndex + 3)?.recycleRecorders()
-                }
+            val textChapter = curTextChapter ?: return@execute
+            if (afterIndex > beforeIndex) {
+                textChapter.getPage(afterIndex - 2)?.recycleRecorders()
+            }
+            if (afterIndex < beforeIndex) {
+                textChapter.getPage(afterIndex + 3)?.recycleRecorders()
             }
         }
     }
@@ -326,12 +329,14 @@ object ReadBook : CoroutineScope by MainScope() {
      */
     private fun curPageChanged(pageChanged: Boolean = false) {
         callBack?.pageChanged()
-        if (BaseReadAloudService.isRun && isLayoutAvailable) {
-            val scrollPageAnim = pageAnim() == 3
-            if (scrollPageAnim && pageChanged) {
-                ReadAloud.pause(appCtx)
-            } else {
-                readAloud(!BaseReadAloudService.pause)
+        curTextChapter?.let {
+            if (BaseReadAloudService.isRun && it.isCompleted) {
+                val scrollPageAnim = pageAnim() == 3
+                if (scrollPageAnim && pageChanged) {
+                    ReadAloud.pause(appCtx)
+                } else {
+                    readAloud(!BaseReadAloudService.pause)
+                }
             }
         }
         upReadTime()
@@ -342,7 +347,9 @@ object ReadBook : CoroutineScope by MainScope() {
      * 朗读
      */
     fun readAloud(play: Boolean = true, startPos: Int = 0) {
-        book?.let {
+        book ?: return
+        val textChapter = curTextChapter ?: return
+        if (textChapter.isCompleted) {
             ReadAloud.play(appCtx, play, startPos = startPos)
         }
     }
@@ -532,89 +539,58 @@ object ReadBook : CoroutineScope by MainScope() {
             )
             val contents = contentProcessor
                 .getContent(book, chapter, content, includeTitle = false)
-            val textChapter =
-                ChapterProvider.getTextChapterAsync(chapter, displayTitle, contents, chapterSize)
+            val textChapter = ChapterProvider.getTextChapterAsync(
+                this@ReadBook, book, chapter, displayTitle, contents, chapterSize
+            )
             when (val offset = chapter.index - durChapterIndex) {
                 0 -> {
                     curTextChapter?.cancelLayout()
                     curTextChapter = textChapter
                     callBack?.upMenuView()
-                    textChapter.setProgressListener(object : LayoutProgressListener {
-                        var available = false
-
-                        override fun onLayoutPageCompleted(index: Int, page: TextPage) {
-                            if (!available && page.containPos(durChapterPos)) {
-                                if (upContent) {
-                                    callBack?.upContent(offset, resetPageOffset)
-                                }
-                                curPageChanged()
-                                callBack?.contentLoadFinish()
-                                available = true
+                    var available = false
+                    for (page in textChapter.layoutChannel) {
+                        val index = page.index
+                        if (!available && page.containPos(durChapterPos)) {
+                            if (upContent) {
+                                callBack?.upContent(offset, resetPageOffset)
                             }
-                            if (upContent && isScroll) {
-                                if (max(index - 3, 0) < durPageIndex) {
-                                    callBack?.upContent(offset, resetPageOffset)
-                                }
+                            available = true
+                        }
+                        if (upContent && isScroll) {
+                            if (max(index - 3, 0) < durPageIndex) {
+                                callBack?.upContent(offset, false)
                             }
-                            callBack?.onLayoutPageCompleted(index, page)
                         }
-
-                        override fun onLayoutCompleted() {
-                            if (upContent) callBack?.upContent(offset, resetPageOffset)
-                            success?.invoke()
-                            callBack?.onLayoutCompleted()
-                        }
-
-                        override fun onLayoutException(e: Throwable) {
-                            AppLog.put("ChapterProvider ERROR", e)
-                            appCtx.toastOnUi("ChapterProvider ERROR:\n${e.stackTraceStr}")
-                            callBack?.onLayoutException(e)
-                        }
-                    })
+                        callBack?.onLayoutPageCompleted(index, page)
+                    }
+                    if (upContent) callBack?.upContent(offset, !available && resetPageOffset)
+                    curPageChanged()
+                    callBack?.contentLoadFinish()
                 }
 
                 -1 -> {
                     prevTextChapter?.cancelLayout()
                     prevTextChapter = textChapter
-                    textChapter.setProgressListener(object : LayoutProgressListener {
-                        override fun onLayoutCompleted() {
-                            if (upContent) callBack?.upContent(offset, resetPageOffset)
-                            success?.invoke()
-                        }
-
-                        override fun onLayoutException(e: Throwable) {
-                            AppLog.put("ChapterProvider ERROR", e)
-                            appCtx.toastOnUi("ChapterProvider ERROR:\n${e.stackTraceStr}")
-                        }
-                    })
+                    textChapter.layoutChannel.receiveAsFlow().collect()
+                    if (upContent) callBack?.upContent(offset, resetPageOffset)
                 }
 
                 1 -> {
                     nextTextChapter?.cancelLayout()
                     nextTextChapter = textChapter
-                    textChapter.setProgressListener(object : LayoutProgressListener {
-                        override fun onLayoutPageCompleted(index: Int, page: TextPage) {
-                            if (index > 1) {
-                                return
-                            }
-                            if (upContent) callBack?.upContent(offset, resetPageOffset)
+                    for (page in textChapter.layoutChannel) {
+                        if (page.index > 1) {
+                            continue
                         }
-
-                        override fun onLayoutCompleted() {
-                            success?.invoke()
-                        }
-
-                        override fun onLayoutException(e: Throwable) {
-                            AppLog.put("ChapterProvider ERROR", e)
-                            appCtx.toastOnUi("ChapterProvider ERROR:\n${e.stackTraceStr}")
-                        }
-                    })
+                        if (upContent) callBack?.upContent(offset, resetPageOffset)
+                    }
                 }
             }
-            textChapter.createLayout(this@ReadBook, book, contents)
         }.onError {
             AppLog.put("ChapterProvider ERROR", it)
             appCtx.toastOnUi("ChapterProvider ERROR:\n${it.stackTraceStr}")
+        }.onSuccess {
+            success?.invoke()
         }
     }
 
@@ -678,7 +654,7 @@ object ReadBook : CoroutineScope by MainScope() {
                 return@execute
             }
             preDownloadTask?.cancel()
-            preDownloadTask = Coroutine.async(executeContext = IO) {
+            preDownloadTask = launch(IO) {
                 //预下载
                 launch {
                     val maxChapterIndex =

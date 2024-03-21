@@ -50,6 +50,7 @@ data class TextPage(
     var doublePage = false
     var paddingTop = ChapterProvider.paddingTop
     var isCompleted = false
+    var hasReadAloudSpan = false
 
     @JvmField
     var textChapter = emptyTextChapter
@@ -178,6 +179,10 @@ data class TextPage(
      * 移除朗读标志
      */
     fun removePageAloudSpan(): TextPage {
+        if (!hasReadAloudSpan) {
+            return this
+        }
+        hasReadAloudSpan = false
         for (i in textLines.indices) {
             textLines[i].isReadAloud = false
         }
@@ -194,7 +199,7 @@ data class TextPage(
         for (index in textLines.indices) {
             val textLine = textLines[index]
             val lineLength = textLine.text.length + if (textLine.isParagraphEnd) 1 else 0
-            if (aloudSpanStart > lineStart && aloudSpanStart < lineStart + lineLength) {
+            if (aloudSpanStart >= lineStart && aloudSpanStart < lineStart + lineLength) {
                 for (i in index - 1 downTo 0) {
                     if (textLines[i].isParagraphEnd) {
                         break
@@ -250,7 +255,14 @@ data class TextPage(
                 length++
             }
         }
-        return length + columnIndex
+        val columns = textLines[maxIndex].columns
+        for (index in 0 until columnIndex) {
+            val column = columns[index]
+            if (column is TextColumn) {
+                length += column.charData.length
+            }
+        }
+        return length
     }
 
     /**

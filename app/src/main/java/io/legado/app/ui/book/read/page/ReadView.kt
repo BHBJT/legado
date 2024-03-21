@@ -624,7 +624,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
             pagePos--
         }
         val startPos = curPage.textPage.getPosByLineColumn(line, column)
-        ReadAloud.play(context, startPos = startPos)
+        ReadBook.readAloud(startPos = startPos)
     }
 
     /**
@@ -666,6 +666,10 @@ class ReadView(context: Context, attrs: AttributeSet) :
 
     fun submitRenderTask() {
         curPage.submitRenderTask()
+    }
+
+    fun isLongScreenShot(): Boolean {
+        return curPage.isLongScreenShot()
     }
 
     override fun onLayoutPageCompleted(index: Int, page: TextPage) {

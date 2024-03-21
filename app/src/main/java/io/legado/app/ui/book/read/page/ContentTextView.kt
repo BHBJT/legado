@@ -47,7 +47,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
     var textPage: TextPage = TextPage()
         private set
     var isMainView = false
-    private var longScreenshot = false
+    var longScreenshot = false
     var reverseStartCursor = false
     var reverseEndCursor = false
 
@@ -85,6 +85,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        if (!isMainView) return
         ChapterProvider.upViewSize(w, h)
         textPage.format()
     }
