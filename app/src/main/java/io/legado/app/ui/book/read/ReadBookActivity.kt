@@ -93,7 +93,6 @@ import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.replace.edit.ReplaceEditActivity
 import io.legado.app.ui.widget.PopupAction
 import io.legado.app.ui.widget.dialog.PhotoDialog
-import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.ACache
 import io.legado.app.utils.Debounce
 import io.legado.app.utils.LogUtils
@@ -114,6 +113,7 @@ import io.legado.app.utils.observeEvent
 import io.legado.app.utils.observeEventSticky
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.sysScreenOffTime
 import io.legado.app.utils.throttle
@@ -553,7 +553,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
             R.id.menu_effective_replaces -> showDialogFragment<EffectiveReplacesDialog>()
 
-            R.id.menu_help -> showReadMenuHelp()
+            R.id.menu_help -> showHelp()
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -942,9 +942,9 @@ class ReadBookActivity : BaseReadBookActivity(),
         }
     }
 
-    override fun upPageAnim() {
+    override fun upPageAnim(upRecorder: Boolean) {
         lifecycleScope.launch {
-            binding.readView.upPageAnim()
+            binding.readView.upPageAnim(upRecorder)
         }
     }
 
@@ -1020,11 +1020,6 @@ class ReadBookActivity : BaseReadBookActivity(),
             isShowingSearchResult -> binding.searchMenu.runMenuIn()
             else -> binding.readMenu.runMenuIn()
         }
-    }
-
-    override fun showReadMenuHelp() {
-        val text = String(assets.open("help/readMenuHelp.md").readBytes())
-        showDialogFragment(TextDialog(getString(R.string.help), text, TextDialog.Mode.MD))
     }
 
     /**
@@ -1255,6 +1250,10 @@ class ReadBookActivity : BaseReadBookActivity(),
         }
     }
 
+    override fun showHelp() {
+        showHelp("readMenuHelp")
+    }
+
     /**
      * 长按图片
      */
@@ -1305,7 +1304,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         when (dialogId) {
             TEXT_COLOR -> {
                 setCurTextColor(color)
-                postEvent(EventBus.UP_CONFIG, arrayListOf(2, 9, 11))
+                postEvent(EventBus.UP_CONFIG, arrayListOf(2, 6, 9, 11))
             }
 
             BG_COLOR -> {
@@ -1501,9 +1500,9 @@ class ReadBookActivity : BaseReadBookActivity(),
                     5 -> if (isInitFinish) ReadBook.loadContent(resetPageOffset = false)
                     6 -> readView.upContent(resetPageOffset = false)
                     8 -> ChapterProvider.upStyle()
-                    9 -> binding.readView.invalidateTextPage()
+                    9 -> readView.invalidateTextPage()
                     10 -> ChapterProvider.upLayout()
-                    11 -> binding.readView.submitRenderTask()
+                    11 -> readView.submitRenderTask()
                 }
             }
         }
@@ -1544,10 +1543,10 @@ class ReadBookActivity : BaseReadBookActivity(),
             viewModel.searchResultList = it
         }
         observeEvent<Boolean>(EventBus.UPDATE_READ_ACTION_BAR) {
-            binding.readMenu.reset()
+            readMenu.reset()
         }
         observeEvent<Boolean>(EventBus.UP_SEEK_BAR) {
-            binding.readMenu.upSeekBar()
+            readMenu.upSeekBar()
         }
     }
 

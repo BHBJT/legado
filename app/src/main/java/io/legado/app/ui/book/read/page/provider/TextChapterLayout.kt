@@ -10,6 +10,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.book.BookContent
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.getBookSource
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.coroutine.Coroutine
@@ -368,6 +369,7 @@ class TextChapterLayout(
                 }
             }
             val textLine = TextLine(isImage = true)
+            textLine.text = " "
             textLine.lineTop = durY + paddingTop
             durY += height
             textLine.lineBottom = durY + paddingTop
