@@ -200,6 +200,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
             }
 
             MotionEvent.ACTION_MOVE -> {
+                if (!pressDown) return true
                 val absX = abs(startX - event.x)
                 val absY = abs(startY - event.y)
                 if (!isMove) {
@@ -443,9 +444,13 @@ class ReadView(context: Context, attrs: AttributeSet) :
         curPage.selectText(x, y) { textPos ->
             val compare = initialTextPos.compare(textPos)
             when {
-                compare >= 0 -> {
+                compare > 0 -> {
                     curPage.selectStartMoveIndex(textPos)
-                    curPage.selectEndMoveIndex(initialTextPos)
+                    curPage.selectEndMoveIndex(
+                        initialTextPos.relativePagePos,
+                        initialTextPos.lineIndex,
+                        initialTextPos.columnIndex - 1
+                    )
                 }
 
                 else -> {
@@ -703,7 +708,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
         }
 
     override fun hasNextChapter(): Boolean {
-        return ReadBook.durChapterIndex < ReadBook.chapterSize - 1
+        return ReadBook.durChapterIndex < ReadBook.simulatedChapterSize - 1
     }
 
     override fun hasPrevChapter(): Boolean {
